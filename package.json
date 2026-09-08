@@ -1,7 +1,7 @@
 {
   "name": "@feedbackjar/react-native-sdk",
-  "version": "0.3.1",
-  "description": "React Native SDK for FeedbackJar \u2014 collect user feedback from iOS and Android apps",
+  "version": "0.4.0",
+  "description": "React Native SDK for FeedbackJar — collect user feedback from iOS and Android apps",
   "homepage": "https://feedbackjar.com",
   "repository": {
     "type": "git",
@@ -18,8 +18,14 @@
   ],
   "license": "MIT",
   "peerDependencies": {
+    "@react-native-async-storage/async-storage": ">=1.0.0",
     "react": ">=17.0.0",
     "react-native": ">=0.70.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-native-async-storage/async-storage": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

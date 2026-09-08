@@ -17,7 +17,9 @@ yarn add @feedbackjar/react-native-sdk
 pnpm add @feedbackjar/react-native-sdk
 ```
 
-The SDK ships two small native modules (autolinked automatically, no manual linking step) — one to read your app's bundle ID/package name, one to persist submitter identity via `UserDefaults`/`SharedPreferences`. No extra npm dependencies are required.
+The SDK ships two small native modules (autolinked automatically, no manual linking step) — one to read your app's bundle ID/package name, one to persist the anon id and submitter identity via `UserDefaults`/`SharedPreferences`. No dependencies are required.
+
+> **Expo Go:** custom native modules don't load in Expo Go, so on-device values won't persist there. Install the optional `@react-native-async-storage/async-storage` (`npx expo install @react-native-async-storage/async-storage`) as a fallback, or use a dev/bare build.
 
 ## Setup
 
@@ -408,8 +410,10 @@ Each submission automatically includes:
 ## Notes
 
 - Feedback can be submitted anonymously, or with a name/email — the SDK never requires either.
-- Name/email are persisted on-device via the SDK's own native storage module (`UserDefaults`/`SharedPreferences`) so they survive app restarts. No extra npm dependency (e.g. AsyncStorage) is required.
-- Votes and comments are attributed to a random per-install id, stored the same way. It is not a device identifier and resets on reinstall / clear-data.
+- The anon id (for vote/comment attribution) and remembered name/email persist on-device. It is not a device identifier and resets on reinstall / clear-data.
+- Storage resolves in this order: the SDK's own native module (`UserDefaults`/`SharedPreferences`, autolinked in bare / dev-client builds) → `@react-native-async-storage/async-storage` if installed → an in-memory fallback that logs a one-time warning and does not survive a reload.
+- **Expo Go:** the native module can't load there, so run `npx expo install @react-native-async-storage/async-storage` (bundled in Expo Go) or the anon id will regenerate on every reload. A dev/bare build doesn't need it.
+- `@react-native-async-storage/async-storage` is an optional peer dependency — the SDK never requires it.
 - Private boards and non-public posts are never returned by `listFeedback`.
 - All methods return a `FeedbackJarResult`; nothing throws on network/HTTP errors.
-- No extra npm dependencies — works out of the box with React Native ≥ 0.70 (native modules autolink).
+- Works out of the box with React Native ≥ 0.70 (native modules autolink).
