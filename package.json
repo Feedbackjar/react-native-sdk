@@ -1,6 +1,6 @@
 {
   "name": "@feedbackjar/react-native-sdk",
-  "version": "0.1.1",
+  "version": "0.3.0",
   "description": "React Native SDK for FeedbackJar — collect user feedback from iOS and Android apps",
   "main": "src/index.ts",
   "types": "src/index.ts",
@@ -13,10 +13,13 @@
   ],
   "license": "MIT",
   "peerDependencies": {
+    "react": ">=17.0.0",
     "react-native": ">=0.70.0"
   },
   "devDependencies": {
+    "@types/react": "^19.0.0",
     "@types/react-native": "^0.73.0",
+    "react": "19.1.0",
     "typescript": "^5.8.2"
   },
   "keywords": [

@@ -1,8 +1,27 @@
-import { getConfig as apiGetConfig, listFeedback as apiListFeedback, submitFeedback } from './ApiClient';
+import {
+  createComment as apiCreateComment,
+  getConfig as apiGetConfig,
+  getVoteState as apiGetVoteState,
+  identify as apiIdentify,
+  listComments as apiListComments,
+  listFeedback as apiListFeedback,
+  submitFeedback,
+  unvotePost as apiUnvotePost,
+  voteOnPost as apiVoteOnPost,
+} from './ApiClient';
+import { getAnonId } from './AnonId';
 import { collectMetadata } from './MetadataCollector';
 import { getNativeAppId } from './NativeAppInfo';
 import { getStoredItem, removeStoredItem, setStoredItem } from './NativeStorage';
-import type { FeedbackIdentity, FeedbackJarResult, FeedbackListResult, FeedbackResponse, WidgetConfig } from './models';
+import type {
+  FeedbackCommentListResult,
+  FeedbackIdentity,
+  FeedbackJarResult,
+  FeedbackListResult,
+  FeedbackResponse,
+  VoteState,
+  WidgetConfig,
+} from './models';
 
 const NAME_STORAGE_KEY = 'com.feedbackjar.sdk.identity.name';
 const EMAIL_STORAGE_KEY = 'com.feedbackjar.sdk.identity.email';
@@ -50,16 +69,42 @@ class FeedbackJarClass {
     this.widgetId = widgetId;
   }
 
+  private requireWidgetId(): FeedbackJarResult<never> | null {
+    if (!this.widgetId) {
+      return {
+        ok: false,
+        error: new Error('FeedbackJar not configured. Call FeedbackJar.configure() first.'),
+      };
+    }
+    return null;
+  }
+
   /**
    * Remember a submitter's name/email so future `submit` calls reuse them
    * automatically. Pass `undefined`/omit a field to leave it unchanged; use
    * `clearIdentity()` to remove both.
+   *
+   * When configured, the name/email are also synced to the server against this
+   * device's anonymous id, so guest votes/comments show the right name and can
+   * be reconciled if the user later signs into the web portal with that email.
    */
   async setIdentity(identity: { name?: string | null; email?: string | null }): Promise<void> {
     await Promise.all([
       identity.name != null ? setStoredItem(NAME_STORAGE_KEY, identity.name) : Promise.resolve(),
       identity.email != null ? setStoredItem(EMAIL_STORAGE_KEY, identity.email) : Promise.resolve(),
     ]);
+
+    if (this.widgetId && (identity.name != null || identity.email != null)) {
+      const anonId = await getAnonId();
+      await apiIdentify(
+        this.widgetId,
+        { name: identity.name, email: identity.email },
+        getNativeAppId(),
+        anonId,
+      ).catch(() => {
+        // Best-effort — a failed sync must not break local identity.
+      });
+    }
   }
 
   /**
@@ -191,12 +236,87 @@ class FeedbackJarClass {
       return { ok: false, error: new Error('FeedbackJar not configured. Call FeedbackJar.configure() first.') };
     }
     const limit = Math.min(Math.max(options?.limit ?? 20, 1), 50);
+    const anonId = await getAnonId();
     return apiListFeedback(
       this.widgetId,
       options?.boardId,
       limit,
       options?.cursor,
       getNativeAppId(),
+      anonId,
+    );
+  }
+
+  /**
+   * Upvote a post as this device's anonymous guest. Idempotent — voting twice
+   * is a no-op. Requires guest voting to be enabled for the project
+   * (`WidgetConfig.allowVotes`). Returns the new count and vote state.
+   */
+  async vote(postId: string): Promise<FeedbackJarResult<VoteState>> {
+    const notReady = this.requireWidgetId();
+    if (notReady) return notReady;
+    return apiVoteOnPost(this.widgetId!, postId, getNativeAppId(), await getAnonId());
+  }
+
+  /** Remove this device's upvote from a post. Idempotent. */
+  async unvote(postId: string): Promise<FeedbackJarResult<VoteState>> {
+    const notReady = this.requireWidgetId();
+    if (notReady) return notReady;
+    return apiUnvotePost(this.widgetId!, postId, getNativeAppId(), await getAnonId());
+  }
+
+  /** Current upvote count and whether this device has voted on the post. */
+  async getVoteState(postId: string): Promise<FeedbackJarResult<VoteState>> {
+    const notReady = this.requireWidgetId();
+    if (notReady) return notReady;
+    return apiGetVoteState(this.widgetId!, postId, getNativeAppId(), await getAnonId());
+  }
+
+  /**
+   * List public comments for a post (two-level threads). Anonymous — no
+   * identity required.
+   */
+  async listComments(
+    postId: string,
+    options?: { limit?: number; cursor?: string },
+  ): Promise<FeedbackJarResult<FeedbackCommentListResult>> {
+    const notReady = this.requireWidgetId();
+    if (notReady) return notReady;
+    const limit = Math.min(Math.max(options?.limit ?? 20, 1), 50);
+    return apiListComments(
+      this.widgetId!,
+      postId,
+      limit,
+      options?.cursor,
+      getNativeAppId(),
+    );
+  }
+
+  /**
+   * Add a public comment (or reply, via `parentId`) as this device's anonymous
+   * guest. `name`/`email` fall back to the remembered identity; email is used
+   * only for reply notifications. Requires guest comments to be enabled
+   * (`WidgetConfig.allowComments`).
+   */
+  async addComment(
+    postId: string,
+    content: string,
+    options?: { parentId?: string; name?: string | null; email?: string | null },
+  ): Promise<FeedbackJarResult<{ id: string }>> {
+    const notReady = this.requireWidgetId();
+    if (notReady) return notReady;
+    const identity = await this.getIdentity();
+    return apiCreateComment(
+      this.widgetId!,
+      postId,
+      {
+        content,
+        parentId: options?.parentId,
+        name: options?.name ?? identity.name,
+        email: options?.email ?? identity.email,
+      },
+      getNativeAppId(),
+      await getAnonId(),
     );
   }
 }

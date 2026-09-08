@@ -29,6 +29,33 @@ import { FeedbackJar } from '@feedbackjar/react-native-sdk';
 FeedbackJar.configure({ widgetId: 'your-widget-id' });
 ```
 
+## Prebuilt UI
+
+If you don't want to build your own screens, drop in `FeedbackJarBoard` — a
+complete feedback board (list, upvote, detail, comments, submission). It's built
+only on React Native primitives, so it adds **no dependency**.
+
+```tsx
+import { FeedbackJarBoard } from '@feedbackjar/react-native-sdk';
+
+function FeedbackScreen() {
+  return <FeedbackJarBoard accentColor="#e5484d" />;
+}
+```
+
+| Prop | Description |
+| --- | --- |
+| `accentColor?` | Colour for the vote state, primary button and links. Default `#e5484d`. |
+| `boardId?` | Restrict the feed to one board. |
+| `onClose?` | When set, a "Close" action appears in the header. |
+
+It reads `getConfig()` on mount and hides the vote pills / comment composer when
+guest voting / commenting is disabled, and shows name/email fields on the
+submission form only when the org asks for them. Follows the system light/dark
+setting.
+
+Everything below is the lower-level API if you'd rather build the UI yourself.
+
 ## Submitting feedback
 
 Submissions can be anonymous, or include a submitter name/email if you collect them in your own form. Each submission automatically carries device metadata (OS version, screen size, locale, timezone).
@@ -151,7 +178,63 @@ FeedbackJar.listFeedback({ limit: 20 }, (result) => {
 });
 ```
 
+Each post carries `hasVoted` — whether this device's anonymous id has upvoted it
+— so you can render a filled/empty vote button without an extra call.
+
+## Voting
+
+Guest upvoting must be enabled for your project (Settings → "Allow guest votes").
+Check `FeedbackJar.getConfig()` → `allowVotes` before showing a vote button.
+
+Votes are attributed to a random per-install id the SDK stores on-device (not a
+device identifier — it resets if the app is reinstalled).
+
+```ts
+const result = await FeedbackJar.vote(postId);
+if (result.ok) {
+  console.log(result.value.upvotes, result.value.hasVoted); // 42, true
+}
+
+// toggle
+await FeedbackJar.unvote(postId);
+
+// read current state (e.g. on a detail screen)
+const state = await FeedbackJar.getVoteState(postId);
+```
+
+`vote` / `unvote` are idempotent — calling `vote` twice is a no-op, not an error.
+
+## Comments
+
+Reading comments needs no identity. Posting requires guest comments to be
+enabled (Settings → "Allow guest comments") — check `getConfig().allowComments`.
+
+```ts
+const result = await FeedbackJar.listComments(postId, { limit: 20 });
+if (result.ok) {
+  for (const comment of result.value.comments) {
+    console.log(comment.authorName, comment.content);
+    for (const reply of comment.replies) {
+      console.log('  ↳', reply.authorName, reply.content);
+    }
+  }
+}
+
+// add a comment (name/email fall back to the remembered identity)
+await FeedbackJar.addComment(postId, 'Please add dark mode!');
+
+// reply to a top-level comment
+await FeedbackJar.addComment(postId, 'Agreed', { parentId: comment.id });
+```
+
+Threads are two levels deep — you cannot reply to a reply. A name/email passed
+here (or set via `setIdentity`) is remembered for the submitter; the email is
+used only for reply notifications and is never linked to a real account unless
+the person later signs into the web portal with it.
+
 ## Example component
+
+
 
 ```tsx
 import React, { useState } from 'react';
@@ -197,9 +280,14 @@ export function FeedbackForm() {
 | `listFeedback(options?): Promise<FeedbackJarResult<FeedbackListResult>>` | List public feedback. `limit` is clamped to 1–50. |
 | `listFeedback(options, callback)` | Callback variant. |
 | `getConfig(): Promise<FeedbackJarResult<WidgetConfig>>` | Fetch whether the org asks for name/email. |
-| `setIdentity({ name?, email? }): Promise<void>` | Remember a submitter's name/email for future `submit` calls. |
+| `setIdentity({ name?, email? }): Promise<void>` | Remember a submitter's name/email for future `submit` calls; also synced to the server for this device. |
 | `getIdentity(): Promise<FeedbackIdentity>` | The currently remembered identity, if any. |
 | `clearIdentity(): Promise<void>` | Forget the remembered identity. |
+| `vote(postId): Promise<FeedbackJarResult<VoteState>>` | Upvote a post as an anonymous guest. Idempotent. Needs `allowVotes`. |
+| `unvote(postId): Promise<FeedbackJarResult<VoteState>>` | Remove this device's upvote. Idempotent. |
+| `getVoteState(postId): Promise<FeedbackJarResult<VoteState>>` | Current upvote count + whether this device voted. |
+| `listComments(postId, options?): Promise<FeedbackJarResult<FeedbackCommentListResult>>` | Public comment thread (two levels). `limit` clamped 1–50. |
+| `addComment(postId, content, options?): Promise<FeedbackJarResult<{ id: string }>>` | Add a comment/reply as a guest. `options.parentId` to reply. Needs `allowComments`. |
 
 ### `FeedbackJarResult<T>`
 
@@ -236,6 +324,7 @@ interface FeedbackPost {
   voteCount: number;
   commentCount: number;
   upvotes: number;
+  hasVoted: boolean;    // this device's anon id has upvoted
   authorName?: string;
   createdAt: string;    // ISO-8601
   updatedAt: string;    // ISO-8601
@@ -257,6 +346,37 @@ interface FeedbackListResult {
 interface WidgetConfig {
   collectName: boolean;   // org asks for the submitter's name
   collectEmail: boolean;  // org asks for the submitter's email
+  allowVotes: boolean;    // guest upvoting enabled
+  allowComments: boolean; // guest commenting enabled
+}
+```
+
+### `VoteState`
+
+```ts
+interface VoteState {
+  upvotes: number;
+  hasVoted: boolean;
+}
+```
+
+### `FeedbackComment` / `FeedbackCommentListResult`
+
+```ts
+interface FeedbackComment {
+  id: string;
+  content: string;
+  authorName: string;
+  authorRole: string | null;  // 'owner' | 'admin' | 'member' when a team member
+  isBot: boolean;
+  parentId: string | null;
+  createdAt: string;          // ISO-8601
+  replies: FeedbackComment[]; // one level only
+}
+
+interface FeedbackCommentListResult {
+  comments: FeedbackComment[];
+  nextCursor?: string;
 }
 ```
 
@@ -289,6 +409,7 @@ Each submission automatically includes:
 
 - Feedback can be submitted anonymously, or with a name/email — the SDK never requires either.
 - Name/email are persisted on-device via the SDK's own native storage module (`UserDefaults`/`SharedPreferences`) so they survive app restarts. No extra npm dependency (e.g. AsyncStorage) is required.
+- Votes and comments are attributed to a random per-install id, stored the same way. It is not a device identifier and resets on reinstall / clear-data.
 - Private boards and non-public posts are never returned by `listFeedback`.
 - All methods return a `FeedbackJarResult`; nothing throws on network/HTTP errors.
 - No extra npm dependencies — works out of the box with React Native ≥ 0.70 (native modules autolink).
