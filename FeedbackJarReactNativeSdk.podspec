@@ -6,6 +6,7 @@ Pod::Spec.new do |s|
   s.name         = 'FeedbackJarReactNativeSdk'
   s.version      = package['version']
   s.summary      = package['description']
+  s.homepage     = package['homepage'] || 'https://feedbackjar.com'
   s.license      = package['license']
   s.authors      = { 'FeedbackJar' => 'support@feedbackjar.com' }
   s.platforms    = { :ios => '13.0' }
