@@ -1,0 +1,294 @@
+# FeedbackJar React Native SDK
+
+A lightweight React Native SDK for collecting user feedback from iOS and Android apps. You build your own form — the SDK handles submission (enriched with device metadata) and fetching the public feedback list.
+
+- **Min React Native:** 0.70.0
+- **Platforms:** iOS & Android
+- **Package:** `@feedbackjar/react-native-sdk`
+- **License:** MIT
+
+## Installation
+
+```sh
+npm install @feedbackjar/react-native-sdk
+# or
+yarn add @feedbackjar/react-native-sdk
+# or
+pnpm add @feedbackjar/react-native-sdk
+```
+
+The SDK ships two small native modules (autolinked automatically, no manual linking step) — one to read your app's bundle ID/package name, one to persist submitter identity via `UserDefaults`/`SharedPreferences`. No extra npm dependencies are required.
+
+## Setup
+
+Configure once before use — typically in your root `App.tsx` or entry file. You need your **widget ID** from the FeedbackJar dashboard.
+
+```ts
+import { FeedbackJar } from '@feedbackjar/react-native-sdk';
+
+FeedbackJar.configure({ widgetId: 'your-widget-id' });
+```
+
+## Submitting feedback
+
+Submissions can be anonymous, or include a submitter name/email if you collect them in your own form. Each submission automatically carries device metadata (OS version, screen size, locale, timezone).
+
+### Promise (recommended)
+
+```ts
+import { FeedbackJar } from '@feedbackjar/react-native-sdk';
+
+const result = await FeedbackJar.submit(userText);
+
+if (result.ok) {
+  console.log('Submitted:', result.value.postId, '—', result.value.type);
+  // show a success state in your UI
+} else {
+  console.error('Failed:', result.error.message);
+  // show an error state
+}
+```
+
+### Callback (no async context needed)
+
+Safe to call from the main thread — the network call runs off the main thread and the callback is invoked when done.
+
+```ts
+FeedbackJar.submit(userText, (result) => {
+  if (result.ok) {
+    // show success state
+  } else {
+    // show error state
+  }
+});
+```
+
+> **Note:** The server applies rate limiting (5 submissions per 15 minutes per IP). Handle the failure case in your UI.
+
+## Custom properties
+
+Attach your own key/value context to a submission — merged into the auto-collected `app` metadata (alongside the bundle ID/package name and version). Values should be `string`, `number`, or `boolean`; nested objects/arrays aren't supported.
+
+```ts
+const result = await FeedbackJar.submit(userText, {
+  properties: { flavor: 'foss', plan: 'pro' },
+});
+```
+
+## Checking whether to ask for name/email
+
+The organization's dashboard settings ("Ask for Name" / "Ask for Email") control whether submitters should be prompted. The SDK doesn't render any UI itself, so read this before building your own form:
+
+```ts
+const config = await FeedbackJar.getConfig();
+if (config.ok) {
+  showNameField = config.value.collectName;
+  showEmailField = config.value.collectEmail;
+}
+```
+
+## Remembering submitter identity
+
+Name/email passed to `submit` are automatically remembered and reused on later calls, so you only need to ask once. Manage this directly with `setIdentity` / `getIdentity` / `clearIdentity`:
+
+```ts
+await FeedbackJar.setIdentity({ name: 'Ada Lovelace', email: 'ada@example.com' });
+
+const identity = await FeedbackJar.getIdentity();
+console.log(identity.name);
+
+// e.g. on logout
+await FeedbackJar.clearIdentity();
+```
+
+## Listing feedback
+
+Fetch the public feedback feed for your organization. Supports pagination via a cursor.
+
+### Promise
+
+```ts
+const result = await FeedbackJar.listFeedback({ limit: 20 });
+
+if (result.ok) {
+  for (const post of result.value.posts) {
+    console.log(`${post.title} — ${post.upvotes} upvotes, ${post.status}`);
+  }
+  // result.value.nextCursor is defined when more pages exist
+}
+```
+
+### Pagination
+
+```ts
+let cursor: string | undefined;
+
+async function loadNextPage() {
+  const result = await FeedbackJar.listFeedback({ limit: 20, cursor });
+  if (result.ok) {
+    renderPosts(result.value.posts);
+    cursor = result.value.nextCursor; // pass this back in for the next page
+  }
+}
+```
+
+### Filter by board
+
+```ts
+const result = await FeedbackJar.listFeedback({
+  boardId: 'your-board-id',
+  limit: 10,
+});
+```
+
+### Callback
+
+```ts
+FeedbackJar.listFeedback({ limit: 20 }, (result) => {
+  if (result.ok) {
+    renderPosts(result.value.posts);
+  }
+});
+```
+
+## Example component
+
+```tsx
+import React, { useState } from 'react';
+import { Button, TextInput, View, Text } from 'react-native';
+import { FeedbackJar } from '@feedbackjar/react-native-sdk';
+
+export function FeedbackForm() {
+  const [text, setText] = useState('');
+  const [status, setStatus] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    if (!text.trim()) return;
+    setStatus('Submitting…');
+    const result = await FeedbackJar.submit(text);
+    setStatus(result.ok ? 'Thanks for your feedback!' : `Error: ${result.error.message}`);
+    if (result.ok) setText('');
+  }
+
+  return (
+    <View>
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        placeholder="Share your feedback…"
+        multiline
+      />
+      <Button title="Submit" onPress={handleSubmit} />
+      {status ? <Text>{status}</Text> : null}
+    </View>
+  );
+}
+```
+
+## API reference
+
+### `FeedbackJar`
+
+| Method | Description |
+| --- | --- |
+| `configure({ widgetId })` | Configure the SDK. Call once before anything else. |
+| `submit(content, options?): Promise<FeedbackJarResult<FeedbackResponse>>` | Submit feedback, optionally with `properties` merged into `app` metadata. Never rejects. |
+| `submit(content, options, callback)` | Callback variant, main-thread safe. |
+| `listFeedback(options?): Promise<FeedbackJarResult<FeedbackListResult>>` | List public feedback. `limit` is clamped to 1–50. |
+| `listFeedback(options, callback)` | Callback variant. |
+| `getConfig(): Promise<FeedbackJarResult<WidgetConfig>>` | Fetch whether the org asks for name/email. |
+| `setIdentity({ name?, email? }): Promise<void>` | Remember a submitter's name/email for future `submit` calls. |
+| `getIdentity(): Promise<FeedbackIdentity>` | The currently remembered identity, if any. |
+| `clearIdentity(): Promise<void>` | Forget the remembered identity. |
+
+### `FeedbackJarResult<T>`
+
+All methods return a discriminated union — nothing ever throws:
+
+```ts
+type FeedbackJarResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: Error };
+```
+
+### `FeedbackResponse`
+
+```ts
+interface FeedbackResponse {
+  postId: string;
+  title: string;    // AI-generated title for the submission
+  type: string;     // e.g. FEEDBACK, BUG, FEATURE_REQUEST
+  boardId: string;
+}
+```
+
+### `FeedbackPost`
+
+```ts
+interface FeedbackPost {
+  id: string;
+  title: string;
+  content: string;
+  type: string;
+  status: string;       // OPEN, IN_PROGRESS, COMPLETED, ...
+  slug: string;
+  boardId: string;
+  voteCount: number;
+  commentCount: number;
+  upvotes: number;
+  authorName?: string;
+  createdAt: string;    // ISO-8601
+  updatedAt: string;    // ISO-8601
+}
+```
+
+### `FeedbackListResult`
+
+```ts
+interface FeedbackListResult {
+  posts: FeedbackPost[];
+  nextCursor?: string;  // undefined when there are no more pages
+}
+```
+
+### `WidgetConfig`
+
+```ts
+interface WidgetConfig {
+  collectName: boolean;   // org asks for the submitter's name
+  collectEmail: boolean;  // org asks for the submitter's email
+}
+```
+
+### `FeedbackIdentity`
+
+```ts
+interface FeedbackIdentity {
+  name: string | null;
+  email: string | null;
+}
+```
+
+## Device metadata
+
+Each submission automatically includes:
+
+| Field | Source |
+| --- | --- |
+| `os.name` | `"iOS"` or `"Android"` |
+| `os.version` | `Platform.Version` |
+| `screen.width` / `screen.height` | `Dimensions.get('screen')` |
+| `screen.scale` | pixel ratio |
+| `locale.language` | Native locale API |
+| `locale.region` | Native locale API |
+| `locale.timezone` | `Intl.DateTimeFormat` |
+| `sdk` | `"react-native"` |
+| `timestamp` | ISO-8601 UTC |
+
+## Notes
+
+- Feedback can be submitted anonymously, or with a name/email — the SDK never requires either.
+- Name/email are persisted on-device via the SDK's own native storage module (`UserDefaults`/`SharedPreferences`) so they survive app restarts. No extra npm dependency (e.g. AsyncStorage) is required.
+- Private boards and non-public posts are never returned by `listFeedback`.
+- All methods return a `FeedbackJarResult`; nothing throws on network/HTTP errors.
+- No extra npm dependencies — works out of the box with React Native ≥ 0.70 (native modules autolink).
