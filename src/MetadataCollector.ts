@@ -41,7 +41,28 @@ function getTimezone(): string {
   }
 }
 
-export function collectMetadata(): DeviceMetadata {
+export interface AppInfoOverride {
+  /** App version string, e.g. `"1.4.0"`. Overrides the native value. */
+  version?: string | null;
+  /** Build number, e.g. `"42"`. Overrides the native value. */
+  build?: string | null;
+}
+
+/**
+ * Merge caller-supplied version/build over the native `app` info, using the
+ * per-platform key names the dashboard expects (`version`/`build` on iOS,
+ * `versionName`/`versionCode` on Android).
+ */
+function resolveAppInfo(override?: AppInfoOverride): Record<string, unknown> {
+  const app: Record<string, unknown> = { ...getNativeAppInfo() };
+  const versionKey = Platform.OS === 'ios' ? 'version' : 'versionName';
+  const buildKey = Platform.OS === 'ios' ? 'build' : 'versionCode';
+  if (override?.version) app[versionKey] = override.version;
+  if (override?.build) app[buildKey] = override.build;
+  return app;
+}
+
+export function collectMetadata(appOverride?: AppInfoOverride): DeviceMetadata {
   const { width, height, scale } = Dimensions.get('screen');
   const localeStr = getLocaleString();
   const parts = localeStr.replace('-', '_').split('_');
@@ -57,7 +78,7 @@ export function collectMetadata(): DeviceMetadata {
       region: parts[1] || '',
       timezone: getTimezone(),
     },
-    app: getNativeAppInfo(),
+    app: resolveAppInfo(appOverride),
     sdk: 'react-native',
     timestamp: new Date().toISOString(),
   };

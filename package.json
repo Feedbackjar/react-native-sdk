@@ -1,6 +1,6 @@
 {
   "name": "@feedbackjar/react-native-sdk",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "React Native SDK for FeedbackJar — collect user feedback from iOS and Android apps",
   "homepage": "https://feedbackjar.com",
   "repository": {

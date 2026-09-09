@@ -62,11 +62,28 @@ interface SubmitOptions {
  * Name/email passed to `submit` are remembered automatically and reused on later
  * calls. Manage them directly with `setIdentity`, `getIdentity`, and `clearIdentity`.
  */
+interface ConfigureOptions {
+  widgetId: string;
+  /**
+   * App version to report in submission metadata (e.g. `"1.4.0"`). Use this when
+   * the SDK's native module can't read it — for example in Expo Go, or when you
+   * prefer a value from `expo-application` / `react-native-device-info`. Falls
+   * back to the native `CFBundleShortVersionString` / `versionName`.
+   */
+  appVersion?: string | null;
+  /** Build number to report in submission metadata (e.g. `"42"`). */
+  appBuild?: string | null;
+}
+
 class FeedbackJarClass {
   private widgetId: string | null = null;
+  private appVersion: string | null = null;
+  private appBuild: string | null = null;
 
-  configure({ widgetId }: { widgetId: string }): void {
+  configure({ widgetId, appVersion, appBuild }: ConfigureOptions): void {
     this.widgetId = widgetId;
+    this.appVersion = appVersion ?? null;
+    this.appBuild = appBuild ?? null;
   }
 
   private requireWidgetId(): FeedbackJarResult<never> | null {
@@ -181,7 +198,7 @@ class FeedbackJarClass {
       await this.setIdentity({ name: options.name, email: options.email });
     }
     const identity = await this.getIdentity();
-    const metadata = collectMetadata();
+    const metadata = collectMetadata({ version: this.appVersion, build: this.appBuild });
     if (options.properties && Object.keys(options.properties).length > 0) {
       Object.assign(metadata.app, options.properties);
     }

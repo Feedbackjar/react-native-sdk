@@ -9,12 +9,13 @@ import {
   View,
 } from 'react-native';
 import { FeedbackJar } from '../FeedbackJar';
-import type { WidgetConfig } from '../models';
+import type { FeedbackPost, WidgetConfig } from '../models';
 import { FONT, RADIUS, useTheme } from './theme';
 
 interface Props {
   config: WidgetConfig;
-  onDone: () => void;
+  /** Called on success with an optimistic post built from the submit response. */
+  onDone: (created?: FeedbackPost) => void;
   onCancel: () => void;
 }
 
@@ -34,16 +35,39 @@ export function NewFeedback({ config, onDone, onCancel }: Props) {
   }, []);
 
   async function send() {
-    if (!text.trim() || sending) return;
+    const body = text.trim();
+    if (!body || sending) return;
     setSending(true);
     setError('');
-    const res = await FeedbackJar.submit(text.trim(), {
+    const res = await FeedbackJar.submit(body, {
       name: config.collectName ? name.trim() || null : null,
       email: config.collectEmail ? email.trim() || null : null,
     });
     setSending(false);
-    if (res.ok) onDone();
-    else setError(res.error.message);
+    if (!res.ok) {
+      setError(res.error.message);
+      return;
+    }
+    // The server may hold the post back for a few seconds (AI classification /
+    // approval) before it appears in the list. Hand the board an optimistic row
+    // so the submitter sees their post immediately; the board reconciles it
+    // against the real one on the next refresh.
+    const now = new Date().toISOString();
+    onDone({
+      id: res.value.postId,
+      title: res.value.title,
+      content: body,
+      type: res.value.type,
+      status: res.value.status ?? 'OPEN',
+      slug: '',
+      boardId: res.value.boardId,
+      voteCount: 0,
+      commentCount: 0,
+      upvotes: 0,
+      hasVoted: false,
+      createdAt: now,
+      updatedAt: now,
+    });
   }
 
   const field = [styles.field, { backgroundColor: theme.fieldBg, color: theme.text }];

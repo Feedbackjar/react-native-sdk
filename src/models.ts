@@ -3,6 +3,8 @@ export interface FeedbackResponse {
   title: string;
   type: string;
   boardId: string;
+  /** Initial post status, e.g. `OPEN` or `PENDING` (approval required). */
+  status?: string;
 }
 
 export interface FeedbackPost {

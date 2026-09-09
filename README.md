@@ -31,6 +31,24 @@ import { FeedbackJar } from '@feedbackjar/react-native-sdk';
 FeedbackJar.configure({ widgetId: 'your-widget-id' });
 ```
 
+### App version in metadata
+
+The SDK's native module reports the app version/build automatically in bare and
+dev-client builds. It **can't** in Expo Go — pass the values yourself so the
+dashboard shows them instead of `unknown`:
+
+```ts
+import * as Application from 'expo-application';
+
+FeedbackJar.configure({
+  widgetId: 'your-widget-id',
+  appVersion: Application.nativeApplicationVersion, // "1.4.0"
+  appBuild: Application.nativeBuildVersion,         // "42"
+});
+```
+
+A supplied value always wins over the native one.
+
 ## Prebuilt UI
 
 If you don't want to build your own screens, drop in `FeedbackJarBoard` — a
@@ -55,6 +73,11 @@ It reads `getConfig()` on mount and hides the vote pills / comment composer when
 guest voting / commenting is disabled, and shows name/email fields on the
 submission form only when the org asks for them. Follows the system light/dark
 setting.
+
+After a submission, the new post can take a few seconds to appear in the public
+list (server-side classification / approval). The board shows it right away as a
+"Posting…" row and swaps it for the real post once it's live — no manual refresh
+needed.
 
 Everything below is the lower-level API if you'd rather build the UI yourself.
 
@@ -276,7 +299,7 @@ export function FeedbackForm() {
 
 | Method | Description |
 | --- | --- |
-| `configure({ widgetId })` | Configure the SDK. Call once before anything else. |
+| `configure({ widgetId, appVersion?, appBuild? })` | Configure the SDK. Call once before anything else. `appVersion`/`appBuild` override the native app-version metadata (needed in Expo Go). |
 | `submit(content, options?): Promise<FeedbackJarResult<FeedbackResponse>>` | Submit feedback, optionally with `properties` merged into `app` metadata. Never rejects. |
 | `submit(content, options, callback)` | Callback variant, main-thread safe. |
 | `listFeedback(options?): Promise<FeedbackJarResult<FeedbackListResult>>` | List public feedback. `limit` is clamped to 1–50. |
@@ -309,6 +332,7 @@ interface FeedbackResponse {
   title: string;    // AI-generated title for the submission
   type: string;     // e.g. FEEDBACK, BUG, FEATURE_REQUEST
   boardId: string;
+  status?: string;  // initial status, e.g. OPEN or PENDING (approval required)
 }
 ```
 
@@ -397,6 +421,9 @@ Each submission automatically includes:
 
 | Field | Source |
 | --- | --- |
+| `app.bundleId` / `app.packageName` | Native module |
+| `app.version` / `app.versionName` | Native module, or `configure({ appVersion })` |
+| `app.build` / `app.versionCode` | Native module, or `configure({ appBuild })` |
 | `os.name` | `"iOS"` or `"Android"` |
 | `os.version` | `Platform.Version` |
 | `screen.width` / `screen.height` | `Dimensions.get('screen')` |
@@ -412,7 +439,7 @@ Each submission automatically includes:
 - Feedback can be submitted anonymously, or with a name/email — the SDK never requires either.
 - The anon id (for vote/comment attribution) and remembered name/email persist on-device. It is not a device identifier and resets on reinstall / clear-data.
 - Storage resolves in this order: the SDK's own native module (`UserDefaults`/`SharedPreferences`, autolinked in bare / dev-client builds) → `@react-native-async-storage/async-storage` if installed → an in-memory fallback that logs a one-time warning and does not survive a reload.
-- **Expo Go:** the native module can't load there, so run `npx expo install @react-native-async-storage/async-storage` (bundled in Expo Go) or the anon id will regenerate on every reload. A dev/bare build doesn't need it.
+- **Expo Go:** the native module can't load there. Run `npx expo install @react-native-async-storage/async-storage` (bundled in Expo Go) or the anon id regenerates on every reload, and pass `configure({ appVersion, appBuild })` or the dashboard shows the app version as `unknown`. A dev/bare build needs neither.
 - `@react-native-async-storage/async-storage` is an optional peer dependency — the SDK never requires it.
 - Private boards and non-public posts are never returned by `listFeedback`.
 - All methods return a `FeedbackJarResult`; nothing throws on network/HTTP errors.

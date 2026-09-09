@@ -48,6 +48,7 @@ interface SubmitResponseBody {
   title: string;
   type: string;
   boardId: string;
+  status?: string;
 }
 
 interface PostBody {
@@ -117,6 +118,7 @@ export async function submitFeedback(
         title: data.title,
         type: data.type,
         boardId: data.boardId,
+        status: data.status,
       },
     };
   } catch (e) {
