@@ -27,6 +27,7 @@ export function FeedbackDetail({ post, config, onBack }: Props) {
   const [error, setError] = useState('');
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [replyTo, setReplyTo] = useState<FeedbackComment | null>(null);
 
   const load = useCallback(async () => {
     const res = await FeedbackJar.listComments(post.id, { limit: 50 });
@@ -46,10 +47,13 @@ export function FeedbackDetail({ post, config, onBack }: Props) {
   async function send() {
     if (!draft.trim() || sending) return;
     setSending(true);
-    const res = await FeedbackJar.addComment(post.id, draft.trim());
+    const res = await FeedbackJar.addComment(post.id, draft.trim(), {
+      parentId: replyTo?.id,
+    });
     setSending(false);
     if (res.ok) {
       setDraft('');
+      setReplyTo(null);
       load();
     } else {
       setError(res.error.message);
@@ -87,7 +91,10 @@ export function FeedbackDetail({ post, config, onBack }: Props) {
             {error || 'No comments yet.'}
           </Text>
         ) : (
-          <CommentThread comments={comments} />
+          <CommentThread
+            comments={comments}
+            onReply={config.allowComments ? setReplyTo : undefined}
+          />
         )}
         {error && comments.length > 0 ? (
           <Text style={[styles.empty, { color: theme.accent }]}>{error}</Text>
@@ -95,7 +102,21 @@ export function FeedbackDetail({ post, config, onBack }: Props) {
       </ScrollView>
 
       {config.allowComments ? (
-        <View style={[styles.composer, { borderTopColor: theme.divider }]}>
+        <View style={[styles.composerWrap, { borderTopColor: theme.divider }]}>
+          {replyTo ? (
+            <View style={styles.replyBar}>
+              <Text style={[styles.replyLabel, { color: theme.textDim }]} numberOfLines={1}>
+                Replying to {replyTo.authorName}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel reply"
+                onPress={() => setReplyTo(null)}>
+                <Text style={[styles.replyLabel, { color: theme.textDim }]}>×</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          <View style={styles.composer}>
           <TextInput
             value={draft}
             onChangeText={setDraft}
@@ -115,6 +136,7 @@ export function FeedbackDetail({ post, config, onBack }: Props) {
             ]}>
             {sending ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.sendText}>↑</Text>}
           </Pressable>
+          </View>
         </View>
       ) : null}
     </View>
@@ -132,13 +154,23 @@ const styles = StyleSheet.create({
   divider: { height: StyleSheet.hairlineWidth, marginVertical: 20 },
   section: { fontSize: FONT.body, fontWeight: '700', marginBottom: 12 },
   empty: { fontSize: FONT.small, marginTop: 8 },
+  composerWrap: {
+    padding: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
-    padding: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
+  replyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 8,
+  },
+  replyLabel: { fontSize: FONT.small, flexShrink: 1 },
   input: {
     flex: 1,
     fontSize: FONT.body,

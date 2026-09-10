@@ -1,5 +1,6 @@
 import { Dimensions, NativeModules, Platform } from 'react-native';
 import { getNativeAppInfo } from './NativeAppInfo';
+import { SDK_NAME, SDK_VERSION } from './version';
 
 interface DeviceMetadata {
   os: {
@@ -17,7 +18,10 @@ interface DeviceMetadata {
     timezone: string;
   };
   app: Record<string, unknown>;
+  /** SDK name, e.g. `"react-native"`. */
   sdk: string;
+  /** SDK package version, e.g. `"0.5.0"`. */
+  sdkVersion: string;
   timestamp: string;
 }
 
@@ -79,7 +83,8 @@ export function collectMetadata(appOverride?: AppInfoOverride): DeviceMetadata {
       timezone: getTimezone(),
     },
     app: resolveAppInfo(appOverride),
-    sdk: 'react-native',
+    sdk: SDK_NAME,
+    sdkVersion: SDK_VERSION,
     timestamp: new Date().toISOString(),
   };
 }

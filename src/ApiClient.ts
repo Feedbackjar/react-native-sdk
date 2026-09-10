@@ -8,11 +8,13 @@ import type {
   VoteState,
   WidgetConfig,
 } from './models';
+import { SDK_IDENTIFIER } from './version';
 
 const BASE_URL = 'https://api.feedbackjar.com';
 
 function buildHeaders(appId?: string, anonId?: string): Record<string, string> {
-  const headers: Record<string, string> = {};
+  // Identifies the client on every request, e.g. "react-native/0.5.0".
+  const headers: Record<string, string> = { 'X-FeedbackJar-SDK': SDK_IDENTIFIER };
   if (appId) {
     headers['X-FeedbackJar-App-Id'] = appId;
   }

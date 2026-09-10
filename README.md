@@ -432,7 +432,11 @@ Each submission automatically includes:
 | `locale.region` | Native locale API |
 | `locale.timezone` | `Intl.DateTimeFormat` |
 | `sdk` | `"react-native"` |
+| `sdkVersion` | SDK package version, e.g. `"0.6.0"` |
 | `timestamp` | ISO-8601 UTC |
+
+Every request (reads and writes) also carries an `X-FeedbackJar-SDK:
+react-native/<version>` header identifying the client.
 
 ## Notes
 

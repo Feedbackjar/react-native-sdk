@@ -10,7 +10,11 @@ sends it on every mutating call:
 ```
 X-FeedbackJar-Anon-Id: <uuid>
 X-FeedbackJar-App-Id:   <bundle id / package name>   (already sent by existing calls)
+X-FeedbackJar-SDK:      <name>/<version>             (all requests, e.g. react-native/0.5.0)
 ```
+
+`X-FeedbackJar-SDK` is informational — sent on every read and write for
+analytics / debugging. The server may log it but must not require it.
 
 The server HMACs the anon id before storage (`ANONYMOUS_VOTE_HASH_SECRET`). If
 the header is absent it falls back to an IP+UA hash, so old SDK versions keep
