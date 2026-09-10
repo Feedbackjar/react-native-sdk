@@ -75,6 +75,13 @@ Sync the guest's name/email to the server for this anon id (e.g. from
 `setIdentity`). Header: anon id. Body: `{ "name"?: string, "email"?: string }`.
 - `200` → `{}`
 
+### `GET /widget/:widgetId/posts/:postId`
+One public post by id — same visibility rules and shape as a `.../posts` list
+item (including `"hasVoted"`). Used to resolve `#[title](postId)` mention
+jump-links. Header: anon id (optional).
+- `200` → the post object
+- `404` `{ "error": "Post not found" }` — missing, private board, pending, or merged
+
 ## Changed existing endpoints
 
 ### `GET /widget/:widgetId/posts`

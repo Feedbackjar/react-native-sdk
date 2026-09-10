@@ -257,6 +257,34 @@ here (or set via `setIdentity`) is remembered for the submitter; the email is
 used only for reply notifications and is never linked to a real account unless
 the person later signs into the web portal with it.
 
+## Rich text
+
+Post and comment content can contain light Markdown (**bold**, *italic*, `code`,
+`[links](url)`, headings, lists, quotes, fenced code) and FeedbackJar mention
+tokens — `#[Post title](postId)` for a post reference and
+`@[Name](user:id)` for a person. `FeedbackJarBoard` renders all of this; list
+previews are flattened to plain text.
+
+In `FeedbackJarBoard`, tapping a `#[…]` post reference opens that post's detail
+screen (fetched via `getPost` when it isn't already loaded). Bare links and
+`[text](url)` open in the browser; `@[…]` mentions are styled but not linked.
+
+Building your own UI? The same renderer is exported — no extra dependency:
+
+```tsx
+import { RichText, toPlainText, FeedbackJar } from '@feedbackjar/react-native-sdk';
+
+<RichText
+  content={post.content}
+  onPostPress={async (postId) => {
+    const res = await FeedbackJar.getPost(postId);
+    if (res.ok) openDetail(res.value);
+  }}
+/>;
+
+const preview = toPlainText(post.content); // for a truncated row
+```
+
 ## Example component
 
 
@@ -304,6 +332,7 @@ export function FeedbackForm() {
 | `submit(content, options, callback)` | Callback variant, main-thread safe. |
 | `listFeedback(options?): Promise<FeedbackJarResult<FeedbackListResult>>` | List public feedback. `limit` is clamped to 1–50. |
 | `listFeedback(options, callback)` | Callback variant. |
+| `getPost(postId): Promise<FeedbackJarResult<FeedbackPost>>` | Fetch one public post — used to resolve `#[…]` mention jump-links. |
 | `getConfig(): Promise<FeedbackJarResult<WidgetConfig>>` | Fetch whether the org asks for name/email. |
 | `setIdentity({ name?, email? }): Promise<void>` | Remember a submitter's name/email for future `submit` calls; also synced to the server for this device. |
 | `getIdentity(): Promise<FeedbackIdentity>` | The currently remembered identity, if any. |
@@ -313,6 +342,14 @@ export function FeedbackForm() {
 | `getVoteState(postId): Promise<FeedbackJarResult<VoteState>>` | Current upvote count + whether this device voted. |
 | `listComments(postId, options?): Promise<FeedbackJarResult<FeedbackCommentListResult>>` | Public comment thread (two levels). `limit` clamped 1–50. |
 | `addComment(postId, content, options?): Promise<FeedbackJarResult<{ id: string }>>` | Add a comment/reply as a guest. `options.parentId` to reply. Needs `allowComments`. |
+
+### Components & helpers
+
+| Export | Description |
+| --- | --- |
+| `<FeedbackJarBoard accentColor? boardId? onClose? />` | Drop-in board — list, upvote, detail, comments, submit. |
+| `<RichText content onPostPress? />` | Render post/comment content: light Markdown + `#[…]` / `@[…]` mentions. |
+| `toPlainText(content): string` | Flatten Markdown + mention tokens to one line (row previews). |
 
 ### `FeedbackJarResult<T>`
 

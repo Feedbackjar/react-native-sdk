@@ -12,6 +12,7 @@ import { FeedbackJar } from '../FeedbackJar';
 import type { FeedbackPost, WidgetConfig } from '../models';
 import { FeedbackDetail } from './FeedbackDetail';
 import { NewFeedback } from './NewFeedback';
+import { toPlainText } from './rich-text';
 import { AccentProvider, DEFAULT_ACCENT, FONT, humanStatus, useTheme } from './theme';
 import { VotePill } from './VotePill';
 
@@ -132,6 +133,20 @@ function BoardInner({ boardId, onClose }: FeedbackJarBoardProps) {
     setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, upvotes, hasVoted } : p)));
   }
 
+  // Jump to a post referenced by a `#[title](postId)` mention — use the loaded
+  // copy if we have it, otherwise fetch it.
+  async function openPost(postId: string) {
+    const known =
+      posts.find((p) => p.id === postId) ??
+      pending.find((x) => x.post.id === postId)?.post;
+    if (known) {
+      setScreen({ name: 'detail', post: known });
+      return;
+    }
+    const res = await FeedbackJar.getPost(postId);
+    if (res.ok) setScreen({ name: 'detail', post: res.value });
+  }
+
   if (screen.name === 'new') {
     return (
       <NewFeedback
@@ -165,6 +180,7 @@ function BoardInner({ boardId, onClose }: FeedbackJarBoardProps) {
         post={posts.find((p) => p.id === screen.post.id) ?? screen.post}
         config={config}
         onBack={() => setScreen({ name: 'board' })}
+        onPostPress={openPost}
       />
     );
   }
@@ -234,7 +250,7 @@ function BoardInner({ boardId, onClose }: FeedbackJarBoardProps) {
                   {item.title}
                 </Text>
                 <Text style={[styles.rowBody, { color: theme.textDim }]} numberOfLines={2}>
-                  {item.content}
+                  {toPlainText(item.content)}
                 </Text>
                 <Text style={[styles.rowMeta, { color: theme.textDim }]}>
                   {isPending

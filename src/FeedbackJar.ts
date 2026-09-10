@@ -2,6 +2,7 @@ import {
   createComment as apiCreateComment,
   getConfig as apiGetConfig,
   getVoteState as apiGetVoteState,
+  getPost as apiGetPost,
   identify as apiIdentify,
   listComments as apiListComments,
   listFeedback as apiListFeedback,
@@ -18,6 +19,7 @@ import type {
   FeedbackIdentity,
   FeedbackJarResult,
   FeedbackListResult,
+  FeedbackPost,
   FeedbackResponse,
   VoteState,
   WidgetConfig,
@@ -262,6 +264,17 @@ class FeedbackJarClass {
       getNativeAppId(),
       anonId,
     );
+  }
+
+  /**
+   * Fetch a single public post by id — used to resolve `#[title](postId)`
+   * mention jump-links. Same visibility rules as `listFeedback`.
+   */
+  async getPost(postId: string): Promise<FeedbackJarResult<FeedbackPost>> {
+    if (!this.widgetId) {
+      return { ok: false, error: new Error('FeedbackJar not configured. Call FeedbackJar.configure() first.') };
+    }
+    return apiGetPost(this.widgetId, postId, getNativeAppId(), await getAnonId());
   }
 
   /**

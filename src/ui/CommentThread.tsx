@@ -1,15 +1,18 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { FeedbackComment } from '../models';
+import { RichText } from './rich-text';
 import { FONT, relativeTime, useTheme } from './theme';
 
 function Row({
   comment,
   indented,
   onReply,
+  onPostPress,
 }: {
   comment: FeedbackComment;
   indented?: boolean;
   onReply?: () => void;
+  onPostPress?: (postId: string) => void;
 }) {
   const theme = useTheme();
   return (
@@ -21,7 +24,7 @@ function Row({
         ) : null}
         <Text style={{ color: theme.textDim }}>{'  '}{relativeTime(comment.createdAt)}</Text>
       </Text>
-      <Text style={[styles.body, { color: theme.text }]}>{comment.content}</Text>
+      <RichText content={comment.content} onPostPress={onPostPress} />
       {onReply ? (
         <Pressable accessibilityRole="button" onPress={onReply}>
           <Text style={[styles.reply, { color: theme.accent }]}>Reply</Text>
@@ -34,18 +37,25 @@ function Row({
 export function CommentThread({
   comments,
   onReply,
+  onPostPress,
 }: {
   comments: FeedbackComment[];
   /** When set, root comments show a "Reply" action. */
   onReply?: (comment: FeedbackComment) => void;
+  /** Open a post referenced by a `#[…]` mention in a comment. */
+  onPostPress?: (postId: string) => void;
 }) {
   return (
     <View style={styles.wrap}>
       {comments.map((c) => (
         <View key={c.id} style={styles.group}>
-          <Row comment={c} onReply={onReply ? () => onReply(c) : undefined} />
+          <Row
+            comment={c}
+            onReply={onReply ? () => onReply(c) : undefined}
+            onPostPress={onPostPress}
+          />
           {c.replies.map((r) => (
-            <Row key={r.id} comment={r} indented />
+            <Row key={r.id} comment={r} indented onPostPress={onPostPress} />
           ))}
         </View>
       ))}
@@ -60,6 +70,5 @@ const styles = StyleSheet.create({
   meta: { fontSize: FONT.small },
   author: { fontWeight: '700' },
   tag: { fontWeight: '700', fontSize: FONT.small - 1 },
-  body: { fontSize: FONT.body, lineHeight: 21 },
   reply: { fontSize: FONT.small, fontWeight: '700', marginTop: 2 },
 });

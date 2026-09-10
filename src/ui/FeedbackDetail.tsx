@@ -11,6 +11,7 @@ import {
 import { FeedbackJar } from '../FeedbackJar';
 import type { FeedbackComment, FeedbackPost, WidgetConfig } from '../models';
 import { CommentThread } from './CommentThread';
+import { RichText } from './rich-text';
 import { FONT, RADIUS, humanStatus, relativeTime, useTheme } from './theme';
 import { VotePill } from './VotePill';
 
@@ -18,9 +19,11 @@ interface Props {
   post: FeedbackPost;
   config: WidgetConfig;
   onBack: () => void;
+  /** Open a post referenced by a `#[…]` mention. */
+  onPostPress?: (postId: string) => void;
 }
 
-export function FeedbackDetail({ post, config, onBack }: Props) {
+export function FeedbackDetail({ post, config, onBack, onPostPress }: Props) {
   const theme = useTheme();
   const [comments, setComments] = useState<FeedbackComment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,7 +82,9 @@ export function FeedbackDetail({ post, config, onBack }: Props) {
           {humanStatus(post.status)}
           {post.authorName ? ` · ${post.authorName}` : ''} · {relativeTime(post.createdAt)}
         </Text>
-        <Text style={[styles.body, { color: theme.text }]}>{post.content}</Text>
+        <View style={styles.bodyWrap}>
+          <RichText content={post.content} onPostPress={onPostPress} />
+        </View>
 
         <View style={[styles.divider, { backgroundColor: theme.divider }]} />
 
@@ -94,6 +99,7 @@ export function FeedbackDetail({ post, config, onBack }: Props) {
           <CommentThread
             comments={comments}
             onReply={config.allowComments ? setReplyTo : undefined}
+            onPostPress={onPostPress}
           />
         )}
         {error && comments.length > 0 ? (
@@ -150,7 +156,7 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   title: { flex: 1, fontSize: FONT.body, fontWeight: '700', lineHeight: 22 },
   meta: { fontSize: FONT.small },
-  body: { fontSize: FONT.body, lineHeight: 22, marginTop: 4 },
+  bodyWrap: { marginTop: 4 },
   divider: { height: StyleSheet.hairlineWidth, marginVertical: 20 },
   section: { fontSize: FONT.body, fontWeight: '700', marginBottom: 12 },
   empty: { fontSize: FONT.small, marginTop: 8 },

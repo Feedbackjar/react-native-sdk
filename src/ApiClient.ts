@@ -151,24 +151,51 @@ export async function listFeedback(
     }
 
     const data: ListResponseBody = await response.json();
-    const posts: FeedbackPost[] = data.posts.map((p) => ({
-      id: p.id,
-      title: p.title,
-      content: p.content,
-      type: p.type,
-      status: p.status,
-      slug: p.slug,
-      boardId: p.boardId,
-      voteCount: p.voteCount,
-      commentCount: p.commentCount,
-      upvotes: p.upvotes,
-      hasVoted: p.hasVoted ?? false,
-      authorName: p.authorName,
-      createdAt: p.createdAt,
-      updatedAt: p.updatedAt,
-    }));
+    const posts: FeedbackPost[] = data.posts.map(mapPost);
 
     return { ok: true, value: { posts, nextCursor: data.nextCursor } };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e : new Error(String(e)) };
+  }
+}
+
+function mapPost(p: PostBody): FeedbackPost {
+  return {
+    id: p.id,
+    title: p.title,
+    content: p.content,
+    type: p.type,
+    status: p.status,
+    slug: p.slug,
+    boardId: p.boardId,
+    voteCount: p.voteCount,
+    commentCount: p.commentCount,
+    upvotes: p.upvotes,
+    hasVoted: p.hasVoted ?? false,
+    authorName: p.authorName,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
+  };
+}
+
+export async function getPost(
+  widgetId: string,
+  postId: string,
+  appId?: string,
+  anonId?: string,
+): Promise<FeedbackJarResult<FeedbackPost>> {
+  try {
+    const response = await fetch(
+      `${BASE_URL}/widget/${widgetId}/posts/${encodeURIComponent(postId)}`,
+      { headers: buildHeaders(appId, anonId) },
+    );
+
+    if (!response.ok) {
+      return { ok: false, error: await errorFrom(response, 'Post fetch failed') };
+    }
+
+    const data: PostBody = await response.json();
+    return { ok: true, value: mapPost(data) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e : new Error(String(e)) };
   }
