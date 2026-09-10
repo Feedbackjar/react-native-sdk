@@ -177,6 +177,9 @@ function BoardInner({ boardId, onClose }: FeedbackJarBoardProps) {
   if (screen.name === 'detail') {
     return (
       <FeedbackDetail
+        // Remount on a jump-link to another post so its comments reload from
+        // scratch instead of briefly showing the previous post's.
+        key={screen.post.id}
         post={posts.find((p) => p.id === screen.post.id) ?? screen.post}
         config={config}
         onBack={() => setScreen({ name: 'board' })}
