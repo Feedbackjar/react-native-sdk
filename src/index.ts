@@ -11,6 +11,6 @@ export type {
   WidgetConfig,
 } from './models';
 export { FeedbackJarBoard } from './ui/FeedbackJarBoard';
-export type { FeedbackJarBoardProps } from './ui/FeedbackJarBoard';
+export type { FeedbackJarBoardHandle, FeedbackJarBoardProps } from './ui/FeedbackJarBoard';
 export { RichText, toPlainText } from './ui/rich-text';
 export type { RichTextProps } from './ui/rich-text';

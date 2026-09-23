@@ -14,12 +14,17 @@ import { FONT, RADIUS, useTheme } from './theme';
 
 interface Props {
   config: WidgetConfig;
+  /**
+   * Called at send time. Return custom key/value pairs to merge into the
+   * submission's metadata. Values must be string, number, or boolean.
+   */
+  properties?: () => Record<string, unknown> | undefined;
   /** Called on success with an optimistic post built from the submit response. */
   onDone: (created?: FeedbackPost) => void;
   onCancel: () => void;
 }
 
-export function NewFeedback({ config, onDone, onCancel }: Props) {
+export function NewFeedback({ config, properties, onDone, onCancel }: Props) {
   const theme = useTheme();
   const [text, setText] = useState('');
   const [name, setName] = useState('');
@@ -42,6 +47,7 @@ export function NewFeedback({ config, onDone, onCancel }: Props) {
     const res = await FeedbackJar.submit(body, {
       name: config.collectName ? name.trim() || null : null,
       email: config.collectEmail ? email.trim() || null : null,
+      properties: properties?.(),
     });
     setSending(false);
     if (!res.ok) {

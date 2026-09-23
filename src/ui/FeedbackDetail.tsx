@@ -21,9 +21,23 @@ interface Props {
   onBack: () => void;
   /** Open a post referenced by a `#[…]` mention. */
   onPostPress?: (postId: string) => void;
+  /**
+   * Called at send time for each comment. Return a name/email to attach to
+   * it. Omit a field to use the remembered identity.
+   */
+  commentIdentity?: () => { name?: string; email?: string } | undefined;
+  /** Called with the authoritative vote count/state once it is known. */
+  onVoteChange?: (upvotes: number, hasVoted: boolean) => void;
 }
 
-export function FeedbackDetail({ post, config, onBack, onPostPress }: Props) {
+export function FeedbackDetail({
+  post,
+  config,
+  onBack,
+  onPostPress,
+  commentIdentity,
+  onVoteChange,
+}: Props) {
   const theme = useTheme();
   const [comments, setComments] = useState<FeedbackComment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +45,9 @@ export function FeedbackDetail({ post, config, onBack, onPostPress }: Props) {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [replyTo, setReplyTo] = useState<FeedbackComment | null>(null);
+  // Seeded from the list row's cached values; refreshed below with the
+  // authoritative count from the server.
+  const [voteState, setVoteState] = useState({ upvotes: post.upvotes, hasVoted: post.hasVoted });
 
   const load = useCallback(async () => {
     const res = await FeedbackJar.listComments(post.id, { limit: 50 });
@@ -47,11 +64,30 @@ export function FeedbackDetail({ post, config, onBack, onPostPress }: Props) {
     load();
   }, [load]);
 
+  // Refresh the vote count/state from the server once — the `post` prop may
+  // carry a stale copy cached from the list.
+  useEffect(() => {
+    if (!config.allowVotes) return;
+    let cancelled = false;
+    FeedbackJar.getVoteState(post.id).then((res) => {
+      if (cancelled || !res.ok) return;
+      setVoteState(res.value);
+      onVoteChange?.(res.value.upvotes, res.value.hasVoted);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id, config.allowVotes]);
+
   async function send() {
     if (!draft.trim() || sending) return;
     setSending(true);
+    const identity = commentIdentity?.();
     const res = await FeedbackJar.addComment(post.id, draft.trim(), {
       parentId: replyTo?.id,
+      name: identity?.name,
+      email: identity?.email,
     });
     setSending(false);
     if (res.ok) {
@@ -75,7 +111,15 @@ export function FeedbackDetail({ post, config, onBack, onPostPress }: Props) {
         <View style={styles.topRow}>
           <Text style={[styles.title, { color: theme.text }]}>{post.title}</Text>
           {config.allowVotes ? (
-            <VotePill postId={post.id} upvotes={post.upvotes} hasVoted={post.hasVoted} />
+            <VotePill
+              postId={post.id}
+              upvotes={voteState.upvotes}
+              hasVoted={voteState.hasVoted}
+              onChange={(upvotes, hasVoted) => {
+                setVoteState({ upvotes, hasVoted });
+                onVoteChange?.(upvotes, hasVoted);
+              }}
+            />
           ) : null}
         </View>
         <Text style={[styles.meta, { color: theme.textDim }]}>

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -23,6 +30,32 @@ export interface FeedbackJarBoardProps {
   boardId?: string;
   /** When provided, a "Close" affordance is shown in the header. */
   onClose?: () => void;
+  /**
+   * Called each time the board's "New" screen sends feedback. Return custom
+   * key/value pairs to merge into the submission's metadata (e.g.
+   * `{ supportId: '...' }`). Values must be string, number, or boolean.
+   */
+  properties?: () => Record<string, unknown> | undefined;
+  /**
+   * Called each time a comment is sent from a post's detail screen. Return a
+   * name/email to attach to it. Omit a field to use the remembered identity
+   * (the default when this prop is left out entirely).
+   */
+  commentIdentity?: () => { name?: string; email?: string } | undefined;
+}
+
+/**
+ * Imperative controls for a mounted {@link FeedbackJarBoard}, obtained via
+ * `useRef<FeedbackJarBoardHandle>(null)`.
+ */
+export interface FeedbackJarBoardHandle {
+  /**
+   * Forget the remembered submitter identity (e.g. on logout). Reloads the
+   * feed and clears the "New" screen's prefilled name/email.
+   */
+  resetIdentity(): void;
+  /** Jump straight to a post's detail screen, e.g. from a push notification. */
+  openPost(postId: string): void;
 }
 
 const PAGE = 20;
@@ -48,15 +81,20 @@ type Screen =
  * <FeedbackJarBoard accentColor="#e5484d" />
  * ```
  */
-export function FeedbackJarBoard(props: FeedbackJarBoardProps) {
-  return (
-    <AccentProvider value={props.accentColor ?? DEFAULT_ACCENT}>
-      <BoardInner {...props} />
-    </AccentProvider>
-  );
-}
+export const FeedbackJarBoard = forwardRef<FeedbackJarBoardHandle, FeedbackJarBoardProps>(
+  function FeedbackJarBoard(props, ref) {
+    return (
+      <AccentProvider value={props.accentColor ?? DEFAULT_ACCENT}>
+        <BoardInner {...props} ref={ref} />
+      </AccentProvider>
+    );
+  },
+);
 
-function BoardInner({ boardId, onClose }: FeedbackJarBoardProps) {
+const BoardInner = forwardRef<FeedbackJarBoardHandle, FeedbackJarBoardProps>(function BoardInner(
+  { boardId, onClose, properties, commentIdentity },
+  ref,
+) {
   const theme = useTheme();
   const [screen, setScreen] = useState<Screen>({ name: 'board' });
   const [config, setConfig] = useState<WidgetConfig>({
@@ -135,22 +173,41 @@ function BoardInner({ boardId, onClose }: FeedbackJarBoardProps) {
 
   // Jump to a post referenced by a `#[title](postId)` mention — use the loaded
   // copy if we have it, otherwise fetch it.
-  async function openPost(postId: string) {
-    const known =
-      posts.find((p) => p.id === postId) ??
-      pending.find((x) => x.post.id === postId)?.post;
-    if (known) {
-      setScreen({ name: 'detail', post: known });
-      return;
-    }
-    const res = await FeedbackJar.getPost(postId);
-    if (res.ok) setScreen({ name: 'detail', post: res.value });
-  }
+  const openPost = useCallback(
+    async (postId: string) => {
+      const known =
+        posts.find((p) => p.id === postId) ?? pending.find((x) => x.post.id === postId)?.post;
+      if (known) {
+        setScreen({ name: 'detail', post: known });
+        return;
+      }
+      const res = await FeedbackJar.getPost(postId);
+      if (res.ok) setScreen({ name: 'detail', post: res.value });
+    },
+    [posts, pending],
+  );
+
+  // Bumped to force a fresh `NewFeedback` (fresh prefilled name/email) after
+  // `resetIdentity` clears the remembered identity.
+  const [identityToken, setIdentityToken] = useState(0);
+
+  const resetIdentity = useCallback(() => {
+    FeedbackJar.clearIdentity().then(() => {
+      setIdentityToken((t) => t + 1);
+      setScreen({ name: 'board' });
+      load(true);
+    });
+  }, [load]);
+
+  useImperativeHandle(ref, () => ({ resetIdentity, openPost }), [resetIdentity, openPost]);
 
   if (screen.name === 'new') {
     return (
       <NewFeedback
+        // Remount after `resetIdentity` so its prefilled name/email clear.
+        key={identityToken}
         config={config}
+        properties={properties}
         onCancel={() => setScreen({ name: 'board' })}
         onDone={(created) => {
           if (created) {
@@ -182,8 +239,10 @@ function BoardInner({ boardId, onClose }: FeedbackJarBoardProps) {
         key={screen.post.id}
         post={posts.find((p) => p.id === screen.post.id) ?? screen.post}
         config={config}
+        commentIdentity={commentIdentity}
         onBack={() => setScreen({ name: 'board' })}
         onPostPress={openPost}
+        onVoteChange={(upvotes, hasVoted) => patchPost(screen.post.id, upvotes, hasVoted)}
       />
     );
   }
@@ -277,7 +336,7 @@ function BoardInner({ boardId, onClose }: FeedbackJarBoardProps) {
       />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
